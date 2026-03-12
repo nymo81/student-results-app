@@ -11,7 +11,7 @@ def ar(text):
         return ""
     return get_display(reshape(str(text)))
 
-# --- Helper: Grading Logic ---
+# --- Helper: Grading Logic (Numbers to Words) ---
 def get_grade(score):
     try:
         s = float(score)
@@ -27,11 +27,15 @@ def get_grade(score):
 
 class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset):
+        # 1. Background Watermark
         if os.path.exists("watermark.png"):
             self.image("watermark.png", x=60, y=y_offset + 25, w=90)
+        
+        # 2. Header Logo
         if os.path.exists("logo.png"):
             self.image("logo.png", x=175, y=y_offset + 5, w=20)
         
+        # 3. Header Text
         self.set_font("Amiri", size=11)
         self.set_xy(10, y_offset + 5)
         self.cell(160, 5, ar("جامعة التراث"), ln=1, align='R')
@@ -39,21 +43,21 @@ class ResultPDF(FPDF):
         self.cell(160, 5, ar("المرحلة الثانية - السميستر الاول"), ln=1, align='R')
         self.cell(160, 5, ar("العام الدراسي 2025-2026"), ln=1, align='R')
 
+        # 4. Student Information
         self.set_y(y_offset + 30)
         self.set_font("Amiri", size=12)
-        # Using .get() with fallback to avoid KeyError
         id_val = data.get('ت', '---')
         name_val = data.get('اسم الطالب', 'Unknown')
         self.cell(95, 10, ar(f"رقم الطالب: {id_val}"), 0, 0, 'R')
         self.cell(95, 10, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
 
-        # List of subjects matching your Excel exactly
+        # 5. Grades Table (Converting Numbers to Words here)
         subjects = [
             ("الرياضيات", data.get("الرياضيات", 0)),
             ("المقاومة", data.get("المقاومة", 0)),
             ("المساحة الهندسية", data.get("المساحة الهندسية", 0)),
             ("الموائع", data.get("الموائع", 0)),
-            ("الخرسانة", data.get("الخرسانة", data.get("الخرسانه", 0))), # Checks both spellings
+            ("الخرسانة", data.get("الخرسانة", data.get("الخرسانه", 0))),
             ("انشاء المباني", data.get("انشاء المباني", 0))
         ]
         
@@ -66,9 +70,11 @@ class ResultPDF(FPDF):
         for sub, score in subjects:
             self.set_x(20)
             self.cell(40, 7, "1", 1, 0, 'C')
-            self.cell(40, 7, ar(get_grade(score)), 1, 0, 'C')
+            # THIS IS WHERE CONVERSION HAPPENS
+            self.cell(40, 7, ar(get_grade(score)), 1, 0, 'C') 
             self.cell(90, 7, ar(sub), 1, 1, 'C')
 
+        # 6. Stamp/Signature
         if os.path.exists("stamp.png"):
             self.image("stamp.png", x=25, y=y_offset + 75, w=35)
         
@@ -76,6 +82,9 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=9)
         self.cell(190, 4, ar("توقيع اللجنة الامتحانية"), 0, 1, 'L')
         self.cell(190, 10, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
+        
+        # Divider Line
+        self.set_draw_color(180, 180, 180)
         self.line(10, y_offset + 98, 200, y_offset + 98)
 
 # --- Streamlit Frontend ---
@@ -87,31 +96,39 @@ uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 if uploaded_file:
     try:
         df = pd.read_excel(uploaded_file, engine='openpyxl')
-        st.success(f"✅ Found {len(df)} students.")
+        st.success(f"✅ Loaded {len(df)} records.")
         
-        # Show a preview of the data so you know it's working
-        with st.expander("View Data Preview"):
+        with st.expander("🔍 View Raw Data (Numbers)"):
             st.dataframe(df.head())
 
         if st.button("🚀 Generate PDF & Download"):
-            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-            
-            if os.path.exists("Amiri-Regular.ttf"):
-                pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-            else:
-                st.error("❌ Font 'Amiri-Regular.ttf' not found!")
-                st.stop()
-                
-            for i, row in df.iterrows():
-                if i % 3 == 0: pdf.add_page()
-                y_offset = (i % 3) * 99 
-                pdf.draw_slip(row, y_offset)
-                
-            st.download_button(
-                label="⬇️ Download All Slips",
-                data=pdf.output(),
-                file_name="Student_Results.pdf",
-                mime="application/pdf"
-            )
+            with st.spinner("Generating PDF... please wait."):
+                try:
+                    pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+                    
+                    if os.path.exists("Amiri-Regular.ttf"):
+                        pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+                    else:
+                        st.error("❌ Font File 'Amiri-Regular.ttf' is missing from GitHub!")
+                        st.stop()
+                        
+                    for i, row in df.iterrows():
+                        if i % 3 == 0: pdf.add_page()
+                        y_offset = (i % 3) * 99 
+                        pdf.draw_slip(row, y_offset)
+                    
+                    # Store output in memory
+                    pdf_data = pdf.output()
+                    
+                    st.download_button(
+                        label="⬇️ Click Here to Save PDF",
+                        data=pdf_data,
+                        file_name="Student_Results_Final.pdf",
+                        mime="application/pdf"
+                    )
+                    st.balloons()
+                except Exception as pdf_err:
+                    st.error(f"⚠️ PDF Generation Failed: {pdf_err}")
+                    
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"⚠️ Error reading Excel: {e}")
