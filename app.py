@@ -5,50 +5,53 @@ from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 import os
 
-# --- Helper Function for Arabic Text ---
+# Function to fix Arabic text rendering
 def ar(text):
-    if not text or pd.isna(text):
-        return ""
-    reshaped_text = reshape(str(text))
-    return get_display(reshaped_text)
+    if not text or pd.isna(text): return ""
+    return get_display(reshape(str(text)))
 
-# --- Grading Logic ---
+# Grading Logic based on your requirements
 def get_grade(score):
     try:
-        score = float(score)
-        if score >= 90: return "ممتاز"
-        if score >= 80: return "جيد جدًا"
-        if score >= 70: return "جيد"
-        if score >= 60: return "متوسط"
-        if score >= 50: return "مقبول"
-        if 45 <= score < 50: return "قيد المعالجة"
+        s = float(score)
+        if s >= 90: return "ممتاز"
+        if s >= 80: return "جيد جدًا"
+        if s >= 70: return "جيد"
+        if s >= 60: return "متوسط"
+        if s >= 50: return "مقبول"
+        if 45 <= s < 50: return "قيد المعالجة"
         return "ضعيف"
-    except:
-        return ""
+    except: return "غائب"
 
 class ResultPDF(FPDF):
-    def add_student_slip(self, data, y_offset):
-        # 1. Background Watermark
+    def draw_slip(self, data, y_offset):
+        # 1. Watermark (Centered in the slip area)
         if os.path.exists("images/watermark.png"):
-            self.image("images/watermark.png", x=50, y=y_offset + 20, w=110, type='PNG')
+            self.image("images/watermark.png", x=60, y=y_offset + 25, w=90)
         
-        # 2. Header (Logo & University Info)
+        # 2. Header
         if os.path.exists("images/logo.png"):
-            self.image("images/logo.png", x=170, y=y_offset + 5, w=25)
-            
-        self.set_xy(10, y_offset + 10)
+            self.image("images/logo.png", x=175, y=y_offset + 5, w=20)
+        
+        self.set_font("Amiri", size=11)
+        self.set_xy(10, y_offset + 5)
+        header_info = [
+            "جامعة التراث",
+            "كلية الهندسة / قسم الهندسة المدنية",
+            "المرحلة الثانية - السميستر الاول",
+            "العام الدراسي 2025-2026"
+        ]
+        for line in header_info:
+            self.cell(160, 5, ar(line), ln=1, align='R')
+
+        # 3. Student Details
+        self.set_y(y_offset + 30)
         self.set_font("Amiri", size=12)
-        self.cell(160, 5, ar("جامعة التراث"), ln=1, align='R')
-        self.cell(160, 5, ar("كلية الهندسة / قسم الهندسة المدنية"), ln=1, align='R')
-        self.cell(160, 5, ar("المرحلة الثانية - السميستر الاول"), ln=1, align='R')
-        self.cell(160, 5, ar("العام الدراسي 2025-2026"), ln=1, align='R')
+        # Using columns for Name and ID
+        self.cell(95, 10, ar(f"رقم الطالب: {data.get('ت', '')}"), 0, 0, 'R')
+        self.cell(95, 10, ar(f"اسم الطالب: {data['اسم الطالب']}"), 0, 1, 'R')
 
-        # 3. Student Info
-        self.set_xy(10, y_offset + 35)
-        name_text = f"اسم الطالب: {data['اسم الطالب']}"
-        self.cell(190, 10, ar(name_text), border=0, align='R')
-
-        # 4. Results Table
+        # 4. Table
         subjects = [
             ("الرياضيات", data.get("الرياضيات", 0)),
             ("المقاومة", data.get("المقاومة", 0)),
@@ -58,50 +61,45 @@ class ResultPDF(FPDF):
             ("انشاء المباني", data.get("انشاء المباني", 0))
         ]
         
-        self.set_xy(15, y_offset + 45)
-        # Table Header
-        self.cell(40, 8, ar("عدد المحاولات"), 1, 0, 'C')
-        self.cell(40, 8, ar("التقدير"), 1, 0, 'C')
-        self.cell(100, 8, ar("المادة"), 1, 1, 'C')
+        self.set_x(20)
+        self.set_fill_color(240, 240, 240)
+        self.cell(40, 8, ar("عدد المحاولات"), 1, 0, 'C', fill=True)
+        self.cell(40, 8, ar("التقدير"), 1, 0, 'C', fill=True)
+        self.cell(90, 8, ar("المادة"), 1, 1, 'C', fill=True)
         
-        # Table Rows
         for sub, score in subjects:
-            self.set_x(15)
-            self.cell(40, 8, "1", 1, 0, 'C')
-            self.cell(40, 8, ar(get_grade(score)), 1, 0, 'C')
-            self.cell(100, 8, ar(sub), 1, 1, 'C')
+            self.set_x(20)
+            self.cell(40, 7, "1", 1, 0, 'C')
+            self.cell(40, 7, ar(get_grade(score)), 1, 0, 'C')
+            self.cell(90, 7, ar(sub), 1, 1, 'C')
 
-        # 5. Footer & Stamp
+        # 5. Stamp & Signature
         if os.path.exists("images/stamp.png"):
-            self.image("images/stamp.png", x=20, y=y_offset + 75, w=35)
+            self.image("images/stamp.png", x=25, y=y_offset + 75, w=35)
         
-        self.set_xy(10, y_offset + 95)
+        self.set_xy(10, y_offset + 88)
         self.set_font("Amiri", size=8)
-        self.cell(190, 5, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 0, 'C')
+        self.cell(190, 4, ar("توقيع اللجنة الامتحانية"), 0, 1, 'L')
+        self.set_x(10)
+        self.cell(190, 4, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
         
-        # Draw Divider Line
-        self.line(10, y_offset + 100, 200, y_offset + 100)
+        # Cut line
+        self.set_draw_color(200, 200, 200)
+        self.line(10, y_offset + 98, 200, y_offset + 98)
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="Student Result Generator")
-st.title("🖨️ Civil Engineering Result Slips")
+st.title("🎓 نظام إصدار وثائق درجات الطلاب")
+file = st.file_uploader("Upload Excel", type=["xlsx"])
 
-uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
-
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-    st.write(f"Loaded {len(df)} students.")
-    
-    if st.button("Generate All Slips (PDF)"):
-        pdf = ResultPDF()
+if file:
+    df = pd.read_excel(file)
+    if st.button("Generate All Slips"):
+        pdf = ResultPDF(orientation='P', unit='mm', format='A4')
         pdf.add_font("Amiri", "", "fonts/Amiri-Regular.ttf")
         
         for i, row in df.iterrows():
-            if i % 3 == 0:  # 3 slips per page
-                pdf.add_page()
+            if i % 3 == 0: pdf.add_page()
+            y_pos = (i % 3) * 99 # 99mm per slip = ~3 per A4
+            pdf.draw_slip(row, y_pos)
             
-            y_pos = (i % 3) * 100 # Adjust spacing
-            pdf.add_student_slip(row, y_pos)
-            
-        pdf_output = pdf.output()
-        st.download_button("Download PDF", data=pdf_output, file_name="Results_2026.pdf")
+        st.download_button("Download Result Slips", pdf.output(), "Slips.pdf")
