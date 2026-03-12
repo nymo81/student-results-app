@@ -64,4 +64,71 @@ class ResultPDF(FPDF):
         self.set_x(20)
         self.set_fill_color(245, 245, 245)
         self.cell(40, 8, ar("عدد المحاولات"), 1, 0, 'C', fill=True)
-        self.cell(40,
+        self.cell(40, 8, ar("التقدير"), 1, 0, 'C', fill=True)
+        self.cell(90, 8, ar("المادة"), 1, 1, 'C', fill=True)
+        
+        for sub, score in subjects:
+            self.set_x(20)
+            self.cell(40, 7, "1", 1, 0, 'C')
+            # THIS IS WHERE CONVERSION HAPPENS
+            self.cell(40, 7, ar(get_grade(score)), 1, 0, 'C') 
+            self.cell(90, 7, ar(sub), 1, 1, 'C')
+
+        # 6. Stamp/Signature
+        if os.path.exists("stamp.png"):
+            self.image("stamp.png", x=25, y=y_offset + 75, w=35)
+        
+        self.set_xy(10, y_offset + 88)
+        self.set_font("Amiri", size=9)
+        self.cell(190, 4, ar("توقيع اللجنة الامتحانية"), 0, 1, 'L')
+        self.cell(190, 10, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
+        
+        # Divider Line
+        self.set_draw_color(180, 180, 180)
+        self.line(10, y_offset + 98, 200, y_offset + 98)
+
+# --- Streamlit Frontend ---
+st.set_page_config(page_title="Result Slip Generator", layout="wide")
+st.title("📊 Civil Engineering Result Slips")
+
+uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
+
+if uploaded_file:
+    try:
+        df = pd.read_excel(uploaded_file, engine='openpyxl')
+        st.success(f"✅ Loaded {len(df)} records.")
+        
+        with st.expander("🔍 View Raw Data (Numbers)"):
+            st.dataframe(df.head())
+
+        if st.button("🚀 Generate PDF & Download"):
+            with st.spinner("Generating PDF... please wait."):
+                try:
+                    pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+                    
+                    if os.path.exists("Amiri-Regular.ttf"):
+                        pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+                    else:
+                        st.error("❌ Font File 'Amiri-Regular.ttf' is missing from GitHub!")
+                        st.stop()
+                        
+                    for i, row in df.iterrows():
+                        if i % 3 == 0: pdf.add_page()
+                        y_offset = (i % 3) * 99 
+                        pdf.draw_slip(row, y_offset)
+                    
+                    # Store output in memory
+                    pdf_data = pdf.output()
+                    
+                    st.download_button(
+                        label="⬇️ Click Here to Save PDF",
+                        data=pdf_data,
+                        file_name="Student_Results_Final.pdf",
+                        mime="application/pdf"
+                    )
+                    st.balloons()
+                except Exception as pdf_err:
+                    st.error(f"⚠️ PDF Generation Failed: {pdf_err}")
+                    
+    except Exception as e:
+        st.error(f"⚠️ Error reading Excel: {e}")
