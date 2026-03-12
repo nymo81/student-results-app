@@ -5,12 +5,14 @@ from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 import os
 
-# Function to fix Arabic text rendering
+# --- Helper: Fix Arabic RTL Display ---
 def ar(text):
-    if not text or pd.isna(text): return ""
+    if not text or pd.isna(text): 
+        return ""
+    # Reshape handles letter connectivity, get_display handles RTL direction
     return get_display(reshape(str(text)))
 
-# Grading Logic based on your requirements
+# --- Helper: Grading Logic ---
 def get_grade(score):
     try:
         s = float(score)
@@ -21,37 +23,37 @@ def get_grade(score):
         if s >= 50: return "مقبول"
         if 45 <= s < 50: return "قيد المعالجة"
         return "ضعيف"
-    except: return "غائب"
+    except:
+        return "غائب"
 
 class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset):
-        # 1. Watermark (Centered in the slip area)
+        # 1. Background Watermark (Now in main folder)
         if os.path.exists("watermark.png"):
             self.image("watermark.png", x=60, y=y_offset + 25, w=90)
         
-        # 2. Header
+        # 2. Header Logo (Now in main folder)
         if os.path.exists("logo.png"):
             self.image("logo.png", x=175, y=y_offset + 5, w=20)
         
+        # 3. Header Text
         self.set_font("Amiri", size=11)
         self.set_xy(10, y_offset + 5)
-        header_info = [
-            "جامعة التراث",
-            "كلية الهندسة / قسم الهندسة المدنية",
-            "المرحلة الثانية - السميستر الاول",
-            "العام الدراسي 2025-2026"
-        ]
-        for line in header_info:
-            self.cell(160, 5, ar(line), ln=1, align='R')
+        self.cell(160, 5, ar("جامعة التراث"), ln=1, align='R')
+        self.cell(160, 5, ar("كلية الهندسة / قسم الهندسة المدنية"), ln=1, align='R')
+        self.cell(160, 5, ar("المرحلة الثانية - السميستر الاول"), ln=1, align='R')
+        self.cell(160, 5, ar("العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 3. Student Details
+        # 4. Student Information
         self.set_y(y_offset + 30)
         self.set_font("Amiri", size=12)
-        # Using columns for Name and ID
-        self.cell(95, 10, ar(f"رقم الطالب: {data.get('ت', '')}"), 0, 0, 'R')
-        self.cell(95, 10, ar(f"اسم الطالب: {data['اسم الطالب']}"), 0, 1, 'R')
+        # Displaying ID (ت) and Name (اسم الطالب)
+        id_val = data.get('ت', '')
+        name_val = data.get('اسم الطالب', '')
+        self.cell(95, 10, ar(f"رقم الطالب: {id_val}"), 0, 0, 'R')
+        self.cell(95, 10, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
 
-        # 4. Table
+        # 5. Grades Table
         subjects = [
             ("الرياضيات", data.get("الرياضيات", 0)),
             ("المقاومة", data.get("المقاومة", 0)),
@@ -62,7 +64,7 @@ class ResultPDF(FPDF):
         ]
         
         self.set_x(20)
-        self.set_fill_color(240, 240, 240)
+        self.set_fill_color(245, 245, 245)
         self.cell(40, 8, ar("عدد المحاولات"), 1, 0, 'C', fill=True)
         self.cell(40, 8, ar("التقدير"), 1, 0, 'C', fill=True)
         self.cell(90, 8, ar("المادة"), 1, 1, 'C', fill=True)
@@ -73,33 +75,53 @@ class ResultPDF(FPDF):
             self.cell(40, 7, ar(get_grade(score)), 1, 0, 'C')
             self.cell(90, 7, ar(sub), 1, 1, 'C')
 
-        # 5. Stamp & Signature
+        # 6. Stamp/Signature & Footer (Now in main folder)
         if os.path.exists("stamp.png"):
             self.image("stamp.png", x=25, y=y_offset + 75, w=35)
         
         self.set_xy(10, y_offset + 88)
-        self.set_font("Amiri", size=8)
+        self.set_font("Amiri", size=9)
         self.cell(190, 4, ar("توقيع اللجنة الامتحانية"), 0, 1, 'L')
-        self.set_x(10)
-        self.cell(190, 4, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
+        self.cell(190, 10, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
         
-        # Cut line
-        self.set_draw_color(200, 200, 200)
+        # Divider Line to separate the 3 slips on A4
+        self.set_draw_color(180, 180, 180)
         self.line(10, y_offset + 98, 200, y_offset + 98)
 
-# --- Streamlit UI ---
-st.title("🎓 نظام إصدار وثائق درجات الطلاب")
-file = st.file_uploader("Upload Excel", type=["xlsx"])
+# --- Streamlit Frontend ---
+st.set_page_config(page_title="Result Slip Generator", layout="centered")
+st.title("📊 Civil Engineering Result Slips")
+st.info("Upload your Excel file and download the PDF with 3 slips per A4 page.")
 
-if file:
-    df = pd.read_excel(file)
-    if st.button("Generate All Slips"):
+uploaded_file = st.file_uploader("Choose Excel File", type=["xlsx"])
+
+if uploaded_file:
+    df = pd.read_excel(uploaded_file)
+    st.success(f"Successfully loaded {len(df)} student records.")
+    
+    if st.button("🚀 Generate PDF & Download"):
         pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-        pdf.add_font("Amiri", "", "fonts/Amiri-Regular.ttf")
         
-        for i, row in df.iterrows():
-            if i % 3 == 0: pdf.add_page()
-            y_pos = (i % 3) * 99 # 99mm per slip = ~3 per A4
-            pdf.draw_slip(row, y_pos)
+        # Load font from main folder
+        if os.path.exists("Amiri-Regular.ttf"):
+            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+        else:
+            st.error("Font file 'Amiri-Regular.ttf' not found in main folder!")
+            st.stop()
             
-        st.download_button("Download Result Slips", pdf.output(), "Slips.pdf")
+        for i, row in df.iterrows():
+            if i % 3 == 0: 
+                pdf.add_page()
+            
+            # Position each slip: 0mm, 99mm, or 198mm from top
+            y_offset = (i % 3) * 99 
+            pdf.draw_slip(row, y_offset)
+            
+        # Output the PDF
+        pdf_output = pdf.output()
+        st.download_button(
+            label="⬇️ Download All Slips (PDF)",
+            data=pdf_output,
+            file_name="Student_Results_2026.pdf",
+            mime="application/pdf"
+        )
