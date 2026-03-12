@@ -25,13 +25,14 @@ class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset):
         # 1. Centered Transparent Watermark
         if os.path.exists("watermark.png"):
-            with self.set_alpha(0.15): # Sets transparency to 15%
-                # Centering: (PageWidth 210 - WatermarkWidth 100) / 2 = 55
-                self.image("watermark.png", x=55, y=y_offset + 15, w=100)
+            self.set_alpha(0.1) # Set transparency (0.1 = 10%)
+            # A4 is 210mm wide. Watermark is 100mm. (210-100)/2 = 55mm
+            self.image("watermark.png", x=55, y=y_offset + 15, w=100)
+            self.set_alpha(1.0) # Reset transparency to full for the rest of the slip
         
         # 2. Larger Logo
         if os.path.exists("logo.png"):
-            self.image("logo.png", x=165, y=y_offset + 8, w=30) # Increased size to 30mm
+            self.image("logo.png", x=165, y=y_offset + 8, w=30)
         
         # 3. Header Text
         self.set_font("Amiri", size=12)
@@ -60,7 +61,7 @@ class ResultPDF(FPDF):
         ]
         
         self.set_x(15)
-        self.set_fill_color(230, 230, 230)
+        self.set_fill_color(240, 240, 240)
         self.set_font("Amiri", size=11)
         self.cell(40, 8, ar("عدد المحاولات"), 1, 0, 'C', fill=True)
         self.cell(40, 8, ar("التقدير"), 1, 0, 'C', fill=True)
@@ -74,7 +75,6 @@ class ResultPDF(FPDF):
 
         # 6. Fit-to-Scale Stamp & Signature
         if os.path.exists("stamp.png"):
-            # Positioned nicely at the bottom left of the table
             self.image("stamp.png", x=20, y=y_offset + 78, w=45) 
         
         # 7. Official Note
@@ -82,10 +82,10 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=8)
         self.cell(190, 4, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
         
-        # 8. Boundary/Cut Line (Dashed)
-        self.set_draw_color(150, 150, 150)
-        self.set_line_width(0.2)
-        self.line(5, y_offset + 98.5, 205, y_offset + 98.5)
+        # 8. Boundary/Cut Line (Dashed for 3 slips on A4)
+        self.set_draw_color(180, 180, 180)
+        self.set_line_width(0.3)
+        self.line(5, y_offset + 98.8, 205, y_offset + 98.8)
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Civil Engineering Slips", layout="wide")
@@ -99,7 +99,7 @@ if file:
     
     if st.button("🚀 Download 3-per-Page PDF"):
         pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-        pdf.set_auto_page_break(auto=False) # Important for exact 3-slip layout
+        pdf.set_auto_page_break(auto=False)
         
         if os.path.exists("Amiri-Regular.ttf"):
             pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
@@ -111,7 +111,6 @@ if file:
             if i % 3 == 0: 
                 pdf.add_page()
             
-            # Use exactly 99mm for each slip to fill 297mm height
             y_offset = (i % 3) * 99 
             pdf.draw_slip(row, y_offset)
             
