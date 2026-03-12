@@ -28,11 +28,11 @@ def get_grade(score):
 
 class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset):
-        # 1. Background Watermark (Now in main folder)
+        # 1. Background Watermark (Main folder)
         if os.path.exists("watermark.png"):
             self.image("watermark.png", x=60, y=y_offset + 25, w=90)
         
-        # 2. Header Logo (Now in main folder)
+        # 2. Header Logo (Main folder)
         if os.path.exists("logo.png"):
             self.image("logo.png", x=175, y=y_offset + 5, w=20)
         
@@ -47,7 +47,6 @@ class ResultPDF(FPDF):
         # 4. Student Information
         self.set_y(y_offset + 30)
         self.set_font("Amiri", size=12)
-        # Displaying ID (ت) and Name (اسم الطالب)
         id_val = data.get('ت', '')
         name_val = data.get('اسم الطالب', '')
         self.cell(95, 10, ar(f"رقم الطالب: {id_val}"), 0, 0, 'R')
@@ -75,7 +74,7 @@ class ResultPDF(FPDF):
             self.cell(40, 7, ar(get_grade(score)), 1, 0, 'C')
             self.cell(90, 7, ar(sub), 1, 1, 'C')
 
-        # 6. Stamp/Signature & Footer (Now in main folder)
+        # 6. Stamp/Signature (Main folder)
         if os.path.exists("stamp.png"):
             self.image("stamp.png", x=25, y=y_offset + 75, w=35)
         
@@ -84,44 +83,37 @@ class ResultPDF(FPDF):
         self.cell(190, 4, ar("توقيع اللجنة الامتحانية"), 0, 1, 'L')
         self.cell(190, 10, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
         
-        # Divider Line to separate the 3 slips on A4
+        # Divider Line
         self.set_draw_color(180, 180, 180)
         self.line(10, y_offset + 98, 200, y_offset + 98)
 
 # --- Streamlit Frontend ---
 st.set_page_config(page_title="Result Slip Generator", layout="centered")
 st.title("📊 Civil Engineering Result Slips")
-st.info("Upload your Excel file and download the PDF with 3 slips per A4 page.")
 
 uploaded_file = st.file_uploader("Choose Excel File", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
-    st.success(f"Successfully loaded {len(df)} student records.")
+    st.success(f"Loaded {len(df)} records.")
     
     if st.button("🚀 Generate PDF & Download"):
         pdf = ResultPDF(orientation='P', unit='mm', format='A4')
         
-        # Load font from main folder
         if os.path.exists("Amiri-Regular.ttf"):
             pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
         else:
-            st.error("Font file 'Amiri-Regular.ttf' not found in main folder!")
+            st.error("Missing Amiri-Regular.ttf in the main folder!")
             st.stop()
             
         for i, row in df.iterrows():
-            if i % 3 == 0: 
-                pdf.add_page()
-            
-            # Position each slip: 0mm, 99mm, or 198mm from top
+            if i % 3 == 0: pdf.add_page()
             y_offset = (i % 3) * 99 
             pdf.draw_slip(row, y_offset)
             
-        # Output the PDF
-        pdf_output = pdf.output()
         st.download_button(
-            label="⬇️ Download All Slips (PDF)",
-            data=pdf_output,
-            file_name="Student_Results_2026.pdf",
+            label="⬇️ Download PDF",
+            data=pdf.output(),
+            file_name="Results.pdf",
             mime="application/pdf"
         )
