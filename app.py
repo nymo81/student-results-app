@@ -26,12 +26,12 @@ def get_grade(score):
 class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset):
         # 1. Watermark (Centered in the slip area)
-        if os.path.exists("images/watermark.png"):
-            self.image("images/watermark.png", x=60, y=y_offset + 25, w=90)
+        if os.path.exists("watermark.png"):
+            self.image("watermark.png", x=60, y=y_offset + 25, w=90)
         
         # 2. Header
-        if os.path.exists("images/logo.png"):
-            self.image("images/logo.png", x=175, y=y_offset + 5, w=20)
+        if os.path.exists("logo.png"):
+            self.image("logo.png", x=175, y=y_offset + 5, w=20)
         
         self.set_font("Amiri", size=11)
         self.set_xy(10, y_offset + 5)
@@ -74,8 +74,8 @@ class ResultPDF(FPDF):
             self.cell(90, 7, ar(sub), 1, 1, 'C')
 
         # 5. Stamp & Signature
-        if os.path.exists("images/stamp.png"):
-            self.image("images/stamp.png", x=25, y=y_offset + 75, w=35)
+        if os.path.exists("stamp.png"):
+            self.image("stamp.png", x=25, y=y_offset + 75, w=35)
         
         self.set_xy(10, y_offset + 88)
         self.set_font("Amiri", size=8)
