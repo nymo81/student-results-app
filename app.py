@@ -14,7 +14,7 @@ def ar(text):
         return ""
     return get_display(reshape(str(text)))
 
-# --- Robust Grading Logic ---
+# --- Grading Logic ---
 def get_grade(score):
     try:
         s = round(float(str(score).strip()))
@@ -25,10 +25,9 @@ def get_grade(score):
         if s >= 50: return "مقبول"
         if 45 <= s < 50: return "قيد المعالجة"
         return "ضعيف"
-    except (ValueError, TypeError):
+    except:
         return "غائب"
 
-# --- Function to Download Image safely ---
 @st.cache_data
 def get_logo_bytes(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -36,32 +35,29 @@ def get_logo_bytes(url):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return BytesIO(response.content)
-    except Exception as e:
-        st.error(f"Error loading logo: {e}")
-    return None
+    except:
+        return None
 
 class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset, logo_data):
-        # 1. Logo (Top Right)
+        # 1. Header & Logo (Logo moved slightly higher)
         if logo_data:
-            self.image(logo_data, x=155, y=y_offset + 8, w=45)
+            self.image(logo_data, x=155, y=y_offset + 5, w=45)
 
-        # 2. University Header
-        self.set_font("Amiri", size=14)
-        self.set_xy(10, y_offset + 10)
-        self.cell(140, 7, ar("جامعة التراث"), ln=1, align='R')
-        self.set_font("Amiri", size=11)
-        self.cell(140, 6, ar("كلية الهندسة / قسم الهندسة المدنية"), ln=1, align='R')
+        self.set_font("Amiri", size=13)
+        self.set_xy(10, y_offset + 5)
+        self.cell(140, 6, ar("جامعة التراث"), ln=1, align='R')
         self.set_font("Amiri", size=10)
+        self.cell(140, 5, ar("كلية الهندسة / قسم الهندسة المدنية"), ln=1, align='R')
         self.cell(140, 5, ar("المرحلة الثانية - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 3. Student Name
-        self.set_y(y_offset + 38)
-        self.set_font("Amiri", size=14)
+        # 2. Student Name (Space minimized)
+        self.set_y(y_offset + 25)
+        self.set_font("Amiri", size=12)
         name_val = data.get('اسم الطالب', '---')
-        self.cell(190, 10, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
+        self.cell(190, 8, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
 
-        # 4. Results Table
+        # 3. Layout: Table (3/4 Right) and Stamp (1/4 Left)
         subjects = [
             ("الرياضيات", data.get("الرياضيات", 0)),
             ("المقاومة", data.get("المقاومة", 0)),
@@ -71,67 +67,68 @@ class ResultPDF(FPDF):
             ("انشاء المباني", data.get("انشاء المباني", 0))
         ]
 
-        self.set_x(15)
+        # Table Start Position (X=65 leaves 55mm space on the left)
+        start_x = 65 
+        self.set_xy(start_x, y_offset + 35)
         self.set_fill_color(245, 245, 245)
-        self.set_font("Amiri", size=12)
+        self.set_font("Amiri", size=11)
         
-        self.cell(70, 10, ar("التقدير"), 1, 0, 'C', fill=True)
-        self.cell(110, 10, ar("المادة"), 1, 1, 'C', fill=True)
+        # Table Header
+        self.cell(45, 8, ar("التقدير"), 1, 0, 'C', fill=True)
+        self.cell(85, 8, ar("المادة"), 1, 1, 'C', fill=True)
         
+        # Table Rows
         for sub, score in subjects:
-            self.set_x(15)
-            self.cell(70, 8, ar(get_grade(score)), 1, 0, 'C')
-            self.cell(110, 8, ar(sub), 1, 1, 'C')
+            self.set_x(start_x)
+            self.cell(45, 7, ar(get_grade(score)), 1, 0, 'C')
+            self.cell(85, 7, ar(sub), 1, 1, 'C')
 
-        # 5. Stamp (Left Side)
-        if os.path.exists("stamp.png"):
-            self.image("stamp.png", x=20, y=y_offset + 72, w=40)
-
-        # 6. Footer
-        self.set_xy(10, y_offset + 90)
+        # 4. Note (Directly under the table)
+        self.set_xy(start_x, y_offset + 80)
         self.set_font("Amiri", size=8)
-        self.cell(190, 4, ar("توقيع اللجنة الامتحانية"), 0, 1, 'L')
-        self.cell(190, 4, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
+        self.cell(130, 5, ar("ملاحظة: لا تعتبر هذه الورقة وثيقة رسمية"), 0, 1, 'C')
 
-        # 7. Divider Line
-        self.set_draw_color(210, 210, 210)
-        self.line(0, y_offset + 99, 210, y_offset + 99)
+        # 5. Stamp (In the blank 1/4 area on the left)
+        if os.path.exists("stamp.png"):
+            self.image("stamp.png", x=15, y=y_offset + 50, w=40)
+        
+        # 6. Committee Signature Label
+        self.set_xy(15, y_offset + 80)
+        self.cell(40, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
+
+        # 7. Exact Divider Line (End of Slip)
+        self.set_draw_color(180, 180, 180)
+        self.line(0, y_offset + 98.5, 210, y_offset + 98.5)
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Result Generator", layout="centered")
-st.title("🎓 Civil Engineering - Result Slips")
+st.title("🎓 Result Slip Generator")
 
-# Pre-load Logo
 logo_url = "https://upload.wikimedia.org/wikipedia/commons/c/c0/Turath_University_Logo_New.jpg"
 logo_data = get_logo_bytes(logo_url)
 
-file = st.file_uploader("Upload Excel (.xlsx)", type=["xlsx"])
+file = st.file_uploader("Upload Excel", type=["xlsx"])
 
 if file:
     df = pd.read_excel(file, engine='openpyxl')
-    st.success(f"Records found: {len(df)}")
-
-    col1, col2 = st.columns(2)
     
-    with col1:
-        if st.button("👁️ Preview Design"):
-            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-            pdf.add_page()
-            pdf.draw_slip(df.iloc[0], 0, logo_data)
-            
-            base64_pdf = base64.b64encode(pdf.output()).decode('utf-8')
-            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="550" type="application/pdf"></iframe>'
-            st.markdown(pdf_display, unsafe_allow_html=True)
+    if st.button("👁️ Preview Design"):
+        pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+        pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+        pdf.add_page()
+        pdf.draw_slip(df.iloc[0], 0, logo_data)
+        base64_pdf = base64.b64encode(pdf.output()).decode('utf-8')
+        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="550" type="application/pdf"></iframe>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
 
-    with col2:
-        if st.button("🚀 Download All PDF"):
-            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-            pdf.set_auto_page_break(auto=False)
-            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-            
-            for i, row in df.iterrows():
-                if i % 3 == 0: pdf.add_page()
-                pdf.draw_slip(row, (i % 3) * 99, logo_data)
-            
-            st.download_button("⬇️ Save PDF", bytes(pdf.output()), "Student_Results_2026.pdf")
+    if st.button("🚀 Download All (3 Slips per A4)"):
+        pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+        pdf.set_auto_page_break(auto=False)
+        pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+        
+        for i, row in df.iterrows():
+            if i % 3 == 0: pdf.add_page()
+            # 99mm offset ensures 3 fit on 297mm height
+            pdf.draw_slip(row, (i % 3) * 99, logo_data)
+        
+        st.download_button("⬇️ Save PDF", bytes(pdf.output()), "Student_Results_2026.pdf")
