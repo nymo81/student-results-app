@@ -14,17 +14,12 @@ def ar(text):
         return ""
     return get_display(reshape(str(text)))
 
-# --- FIXED Grading Logic ---
+# --- Robust Grading Logic ---
 def get_grade(score):
     try:
-        # Handle empty cells
         if pd.isna(score) or str(score).strip() == "":
             return "غائب"
-        
-        # Convert to number
         s = float(str(score).strip())
-        
-        # Exact Grade Mapping
         if s >= 90: return "ممتاز"
         if s >= 80: return "جيد جدًا"
         if s >= 70: return "جيد"
@@ -58,18 +53,17 @@ class ResultPDF(FPDF):
         self.cell(140, 5, ar("كلية الهندسة / قسم الهندسة المدنية"), ln=1, align='R')
         self.cell(140, 5, ar("المرحلة الثانية - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 2. Student Info (Clean Section Letter)
+        # 2. Student Info (Name + Section Letter)
         self.set_y(y_offset + 22)
         self.set_font("Amiri", size=12)
         name_val = data.get('اسم الطالب', '---')
         raw_group = str(data.get('الشعبة', '---'))
-        # Removes "group -", "Group -", and any trailing spaces
-        group_letter = raw_group.replace('group -', '').replace('Group -', '').replace('group', '').replace('Group', '').strip()
+        group_letter = raw_group.replace('group -', '').replace('Group -', '').replace('group-','').strip()
         
         student_info = f"اسم الطالب: {name_val}    -    الشعبة: {group_letter}"
         self.cell(190, 8, ar(student_info), 0, 1, 'R')
 
-        # 3. Subjects (Column Matching)
+        # 3. Subjects Mapping (Using stripped names to avoid KeyErrors)
         subjects = [
             ("الرياضيات", data.get("الرياضيات", 0)),
             ("المقاومة", data.get("المقاومة", 0)),
@@ -79,7 +73,7 @@ class ResultPDF(FPDF):
             ("انشاء المباني", data.get("انشاء المباني", 0))
         ]
 
-        # 4. Table (Right 3/4)
+        # 4. Table (Right Side)
         start_x = 65 
         self.set_xy(start_x, y_offset + 32)
         self.set_fill_color(245, 245, 245)
@@ -93,12 +87,55 @@ class ResultPDF(FPDF):
             self.cell(45, 7, ar(get_grade(score)), 1, 0, 'C')
             self.cell(85, 7, ar(sub), 1, 1, 'C')
 
-        # 5. Stamp (Moved 2cm higher from text)
+        # 5. Stamp & Signature (Moved Upper: 2cm gap from text)
         if os.path.exists("stamp.png"):
-            # x=5 for left alignment, y moved up to 25 to create the gap
-            self.image("stamp.png", x=5, y=y_offset + 25, w=65)
+            # Moved up to y=48 (Signature text is at 78, gap is ~3cm)
+            self.image("stamp.png", x=5, y=y_offset + 48, w=65)
         
-        # 6. Signature Label
-        self.set_xy(5, y_offset + 82)
-        self.set_font("Amiri", size=10)
-        self.cell(65, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C
+        # 6. Signature Label (Moved Upper)
+        self.set_xy(5, y_offset + 78)
+        self.set_font("Amiri", size=9)
+        self.cell(65, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
+
+        # 7. BOLD NOTE (Bottom Center)
+        self.set_xy(10, y_offset + 92)
+        self.set_font("Amiri", size=11)
+        self.cell(190, 5, ar("ملاحظة: لاتعتبر هذة الورقة وثيقة رسمية"), 0, 1, 'C')
+
+        # 8. Divider Line
+        self.set_draw_color(180, 180, 180)
+        self.line(0, y_offset + 98.8, 210, y_offset + 98.8)
+
+# --- Streamlit UI ---
+st.set_page_config(page_title="Al-Turath Results", layout="centered")
+st.title("🎓 Result Slip Generator")
+
+logo_url = "https://upload.wikimedia.org/wikipedia/commons/c/c0/Turath_University_Logo_New.jpg"
+logo_data = get_logo_bytes(logo_url)
+
+file = st.file_uploader("Upload Excel", type=["xlsx"])
+
+if file:
+    df = pd.read_excel(file, engine='openpyxl')
+    # CRITICAL: Strip spaces from all column names to fix grading issues
+    df.columns = df.columns.str.strip()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("👁️ Preview Design"):
+            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+            pdf.add_page()
+            pdf.draw_slip(df.iloc[0], 0, logo_data)
+            base64_pdf = base64.b64encode(pdf.output()).decode('utf-8')
+            st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="550" type="application/pdf"></iframe>', unsafe_allow_html=True)
+
+    with col2:
+        if st.button("🚀 Download All PDF"):
+            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+            pdf.set_auto_page_break(auto=False)
+            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+            for i, row in df.iterrows():
+                if i % 3 == 0: pdf.add_page()
+                pdf.draw_slip(row, (i % 3) * 99, logo_data)
+            st.download_button("⬇️ Save PDF", bytes(pdf.output()), "Turath_Results_Final.pdf")
