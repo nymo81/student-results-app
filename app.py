@@ -63,7 +63,7 @@ class ResultPDF(FPDF):
         student_info = f"اسم الطالب: {name_val}    -    الشعبة: {group_letter}"
         self.cell(190, 8, ar(student_info), 0, 1, 'R')
 
-        # 3. Subjects Mapping (Using stripped names to avoid KeyErrors)
+        # 3. Table (3/4 Right)
         subjects = [
             ("الرياضيات", data.get("الرياضيات", 0)),
             ("المقاومة", data.get("المقاومة", 0)),
@@ -73,7 +73,6 @@ class ResultPDF(FPDF):
             ("انشاء المباني", data.get("انشاء المباني", 0))
         ]
 
-        # 4. Table (Right Side)
         start_x = 65 
         self.set_xy(start_x, y_offset + 32)
         self.set_fill_color(245, 245, 245)
@@ -87,22 +86,22 @@ class ResultPDF(FPDF):
             self.cell(45, 7, ar(get_grade(score)), 1, 0, 'C')
             self.cell(85, 7, ar(sub), 1, 1, 'C')
 
-        # 5. Stamp & Signature (Moved Upper: 2cm gap from text)
+        # 4. Stamp (Left Side - Moved Significantly Higher)
         if os.path.exists("stamp.png"):
-            # Moved up to y=48 (Signature text is at 78, gap is ~3cm)
-            self.image("stamp.png", x=5, y=y_offset + 48, w=65)
+            # Moved up to y=35 (Header ends at 20, Table ends at 74)
+            self.image("stamp.png", x=5, y=y_offset + 35, w=60)
         
-        # 6. Signature Label (Moved Upper)
-        self.set_xy(5, y_offset + 78)
+        # 5. Signature Label (Pinned to the bottom left)
+        self.set_xy(5, y_offset + 82)
         self.set_font("Amiri", size=9)
-        self.cell(65, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
+        self.cell(60, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
 
-        # 7. BOLD NOTE (Bottom Center)
+        # 6. BOLD NOTE (Bottom Center)
         self.set_xy(10, y_offset + 92)
         self.set_font("Amiri", size=11)
         self.cell(190, 5, ar("ملاحظة: لاتعتبر هذة الورقة وثيقة رسمية"), 0, 1, 'C')
 
-        # 8. Divider Line
+        # 7. Divider Line
         self.set_draw_color(180, 180, 180)
         self.line(0, y_offset + 98.8, 210, y_offset + 98.8)
 
@@ -117,7 +116,6 @@ file = st.file_uploader("Upload Excel", type=["xlsx"])
 
 if file:
     df = pd.read_excel(file, engine='openpyxl')
-    # CRITICAL: Strip spaces from all column names to fix grading issues
     df.columns = df.columns.str.strip()
     
     col1, col2 = st.columns(2)
