@@ -53,11 +53,13 @@ class ResultPDF(FPDF):
         self.cell(140, 5, ar("كلية الهندسة / قسم الهندسة المدنية"), ln=1, align='R')
         self.cell(140, 5, ar("المرحلة الثانية - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 2. Student Name
+        # 2. Student Info (Name + Section)
         self.set_y(y_offset + 22)
         self.set_font("Amiri", size=12)
         name_val = data.get('اسم الطالب', '---')
-        self.cell(190, 8, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
+        group_val = data.get('الشعبة', '---')
+        student_info = f"اسم الطالب: {name_val}    -    الشعبة: {group_val}"
+        self.cell(190, 8, ar(student_info), 0, 1, 'R')
 
         # 3. Subjects Mapping
         subjects = [
@@ -83,17 +85,17 @@ class ResultPDF(FPDF):
             self.cell(45, 7, ar(get_grade(score)), 1, 0, 'C')
             self.cell(85, 7, ar(sub), 1, 1, 'C')
 
-        # 5. Stamp (Left Side)
+        # 5. Stamp (Left Side - Resized to 55mm for actual scale)
         if os.path.exists("stamp.png"):
-            self.image("stamp.png", x=15, y=y_offset + 40, w=40)
+            self.image("stamp.png", x=8, y=y_offset + 42, w=55)
         
-        self.set_xy(15, y_offset + 78)
+        self.set_xy(10, y_offset + 78)
         self.set_font("Amiri", size=9)
-        self.cell(40, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
+        self.cell(50, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
 
-        # 6. BOLD NOTE (Pinned to the very bottom)
+        # 6. BOLD NOTE (Bottom Center)
         self.set_xy(10, y_offset + 92)
-        self.set_font("Amiri", size=11) # Size 11 makes it look bold relative to footer text
+        self.set_font("Amiri", size=11)
         self.cell(190, 5, ar("ملاحظة: لاتعتبر هذة الورقة وثيقة رسمية"), 0, 1, 'C')
 
         # 7. Divider Line
