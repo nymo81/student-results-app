@@ -25,7 +25,6 @@ def get_grade(score):
         if s >= 70: return "جيد"
         if s >= 60: return "متوسط"
         if s >= 50: return "مقبول"
-        if 45 <= s < 50: return "قيد المعالجة"
         return "ضعيف"
     except:
         return "ضعيف"
