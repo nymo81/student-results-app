@@ -7,6 +7,7 @@ import os
 import base64
 import requests
 from io import BytesIO
+import re
 
 # --- Arabic Text Fixer ---
 def ar(text):
@@ -14,18 +15,21 @@ def ar(text):
         return ""
     return get_display(reshape(str(text)))
 
-# --- FIXED GRADING LOGIC (Removed Processing Grade) ---
+# --- FIXED GRADING LOGIC (Aggressive Cleaning) ---
 def get_grade(score):
     try:
-        if pd.isna(score) or str(score).strip() == "":
-            return "غائب"
-        s = float(str(score).strip())
+        if pd.isna(score): return "غائب"
+        # Remove any non-numeric characters except dots
+        clean_s = re.sub(r'[^\d.]', '', str(score).strip())
+        if not clean_s: return "غائب"
+        
+        s = float(clean_s)
         if s >= 90: return "ممتاز"
         if s >= 80: return "جيد جدًا"
         if s >= 70: return "جيد"
         if s >= 60: return "متوسط"
         if s >= 50: return "مقبول"
-        return "ضعيف" # 45-50 is now Weak
+        return "ضعيف"
     except:
         return "ضعيف"
 
@@ -46,6 +50,7 @@ class ResultPDF(FPDF):
             self.image(logo_data, x=155, y=y_offset + 12, w=45)
 
         # 2. Header Text
+        self.set_text_color(0, 51, 102) # Dark Blue Header
         self.set_font("Amiri", size=15)
         self.set_xy(10, y_offset + 12)
         self.cell(140, 8, ar("جامعة التراث"), ln=1, align='R')
@@ -54,87 +59,95 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=11)
         self.cell(140, 6, ar(f"{stage_name} - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 3. Student Name (Pulling from Column B/Index 1)
+        # 3. Student Name
+        self.set_text_color(0, 0, 0) # Black Text
         self.set_y(y_offset + 45)
         self.set_font("Amiri", size=14)
-        
-        # We try to get by name first, if not, we use the second column index
-        name_val = data.get('اسم الطالب', data.iloc[1] if len(data) > 1 else '---')
+        # Find name by index 1 (Column B)
+        name_val = data.iloc[1] if len(data) > 1 else "---"
         self.cell(190, 10, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
 
-        # 4. Define Subjects based on Stage
+        # 4. Define Subjects
         if "الأولى" in stage_name:
-            # Columns C through I
-            subjects = [
-                ("الرسم الهندسي", data.get("الرسم الهندسي", 0)),
-                ("ميكانيك", data.get("ميكانيك", 0)),
-                ("الرياضيات", data.get("الرياضيات", 0)),
-                ("اللغة العربية", data.get("اللغة العربية", 0)),
-                ("مواد البناء", data.get("مواد البناء", 0)),
-                ("حاسوب", data.get("حاسوب", 0)),
-                ("رسم هندسي", data.get("رسم هندسي", 0))
-            ]
+            sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "رسم هندسي"]
         else:
-            subjects = [
-                ("الرياضيات", data.get("الرياضيات", 0)),
-                ("المقاومة", data.get("المقاومة", 0)),
-                ("المساحة الهندسية", data.get("المساحة الهندسية", 0)),
-                ("الموائع", data.get("الموائع", 0)),
-                ("الخرسانة", data.get("الخرسانة", data.get("الخرسانه", 0))),
-                ("انشاء المباني", data.get("انشاء المباني", 0))
-            ]
+            sub_list = ["الرياضيات", "المقاومة", "المساحة الهندسية", "الموائع", "الخرسانة", "انشاء المباني"]
 
-        # 5. Table (Shifted Right)
+        subjects = []
+        for s_name in sub_list:
+            # Flexible mapping: find column that contains the subject name
+            val = 0
+            for col in data.index:
+                if s_name in str(col):
+                    val = data[col]
+                    break
+            subjects.append((s_name, val))
+
+        # 5. Table (Colorful & Bordered)
         start_x = 65 
         self.set_xy(start_x, y_offset + 60)
-        self.set_fill_color(240, 242, 246) # Light professional blue-grey
-        self.set_font("Amiri", size=12)
         
+        # Header Styling
+        self.set_fill_color(0, 51, 102) # Dark Blue Header
+        self.set_text_color(255, 255, 255) # White Text
+        self.set_font("Amiri", size=12)
         self.cell(45, 10, ar("التقدير"), 1, 0, 'C', fill=True)
         self.cell(85, 10, ar("المادة"), 1, 1, 'C', fill=True)
         
-        for sub, score in subjects:
+        # Rows Styling
+        self.set_text_color(0, 0, 0)
+        for i, (sub, score) in enumerate(subjects):
             self.set_x(start_x)
-            self.cell(45, 9, ar(get_grade(score)), 1, 0, 'C')
-            self.cell(85, 9, ar(sub), 1, 1, 'C')
+            # Alternating Row Colors
+            if i % 2 == 0:
+                self.set_fill_color(240, 245, 255) # Very Light Blue
+            else:
+                self.set_fill_color(255, 255, 255) # White
+            
+            grade = get_grade(score)
+            # Highlight "Weak" in red-ish text
+            if grade == "ضعيف": self.set_text_color(200, 0, 0)
+            else: self.set_text_color(0, 0, 0)
+                
+            self.cell(45, 9, ar(grade), 1, 0, 'C', fill=True)
+            self.set_text_color(0, 0, 0) # Reset to black for subject name
+            self.cell(85, 9, ar(sub), 1, 1, 'C', fill=True)
 
-        # 6. Stamp & Sign (Large & Positioned in the Left Blank Space)
+        # 6. Stamp & Sign (Actual Size)
         if os.path.exists("stamp.png"):
-            self.image("stamp.png", x=10, y=y_offset + 70, w=55) # Larger "Actual Size"
+            self.image("stamp.png", x=10, y=y_offset + 75, w=55)
         
-        self.set_xy(10, y_offset + 125)
+        self.set_xy(10, y_offset + 130)
         self.set_font("Amiri", size=11)
         self.cell(55, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
 
         # 7. Bold Official Note
-        self.set_xy(10, y_offset + 140)
+        self.set_xy(10, y_offset + 142)
         self.set_font("Amiri", size=12)
         self.cell(190, 5, ar("ملاحظة: لاتعتبر هذة الورقة وثيقة رسمية"), 0, 1, 'C')
 
-        # 8. Divider Line for A4 half-cut
-        self.set_draw_color(150, 150, 150)
-        self.set_line_width(0.3)
+        # 8. Divider Line
+        self.set_draw_color(0, 51, 102)
+        self.set_line_width(0.5)
         self.line(0, y_offset + 148.5, 210, y_offset + 148.5)
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="Al-Turath Results", layout="centered")
-st.title("🎓 Stage 1 & 2 Result Generator")
+st.set_page_config(page_title="Result Generator", layout="centered")
+st.title("📑 Al-Turath Official Result Slips")
 
-stage_option = st.selectbox(
-    "Select Academic Stage:",
-    ("المرحلة الأولى", "المرحلة الثانية")
-)
+stage_option = st.selectbox("Select Stage:", ("المرحلة الأولى", "المرحلة الثانية"))
 
 logo_url = "https://upload.wikimedia.org/wikipedia/commons/c/c0/Turath_University_Logo_New.jpg"
 logo_data = get_logo_bytes(logo_url)
 
-file = st.file_uploader("Upload Excel File", type=["xlsx"])
+file = st.file_uploader("Upload Excel", type=["xlsx"])
 
 if file:
     df = pd.read_excel(file, engine='openpyxl')
-    df.columns = df.columns.str.strip()
+    # Strip spaces from column names
+    df.columns = [str(c).strip() for c in df.columns]
     
-    st.info(f"Detected columns: {', '.join(df.columns[:5])}...")
+    st.success(f"Loaded {len(df)} students.")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -144,16 +157,14 @@ if file:
             pdf.add_page()
             pdf.draw_slip(df.iloc[0], 0, logo_data, stage_option)
             base64_pdf = base64.b64encode(pdf.output()).decode('utf-8')
-            st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="650" type="application/pdf"></iframe>', unsafe_allow_html=True)
+            st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="700" type="application/pdf"></iframe>', unsafe_allow_html=True)
 
     with col2:
         if st.button("🚀 Download Full PDF"):
             pdf = ResultPDF(orientation='P', unit='mm', format='A4')
             pdf.set_auto_page_break(auto=False)
             pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-            
             for i, row in df.iterrows():
                 if i % 2 == 0: pdf.add_page()
                 pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
-                
-            st.download_button("⬇️ Download PDF", bytes(pdf.output()), f"Results_{stage_option}.pdf")
+            st.download_button("⬇️ Download", bytes(pdf.output()), f"{stage_option}_Results.pdf")
