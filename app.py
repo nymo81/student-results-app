@@ -61,12 +61,14 @@ class ResultPDF(FPDF):
         # 3. Student Name (Bold & Large)
         self.set_y(y_offset + 42)
         self.set_font("Amiri", size=16) 
+        # Using Index 1 for Column B
         name_val = data.iloc[1] if len(data) > 1 else "---"
         self.cell(190, 10, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
 
-        # 4. Define Subjects
+        # 4. Define Subjects (Updated List)
         if "الأولى" in stage_name:
-            sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "رسم هندسي"]
+            # Removed the duplicate entry as requested
+            sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
             sub_list = ["الرياضيات", "المقاومة", "المساحة الهندسية", "الموائع", "الخرسانة", "انشاء المباني"]
 
@@ -74,28 +76,28 @@ class ResultPDF(FPDF):
         for s_name in sub_list:
             val = 0
             for col in data.index:
-                if s_name in str(col):
+                if s_name == str(col).strip():
                     val = data[col]
                     break
             subjects.append((s_name, val))
 
-        # 5. Table (Clean Light Blue Theme)
+        # 5. Table (2-Slip Layout Optimization)
         start_x = 65 
         self.set_xy(start_x, y_offset + 58)
         
-        # Header Styling: Soft Blue
-        self.set_fill_color(214, 230, 245) # Soft Sky Blue
+        # Header: Light Blue
+        self.set_fill_color(214, 230, 245) 
         self.set_font("Amiri", size=13)
         self.cell(45, 11, ar("التقدير"), 1, 0, 'C', fill=True)
         self.cell(85, 11, ar("المادة"), 1, 1, 'C', fill=True)
         
-        # Rows Styling
+        # Rows
         for i, (sub, score) in enumerate(subjects):
             self.set_x(start_x)
             if i % 2 == 0:
-                self.set_fill_color(245, 250, 255) # Very Faint Blue
+                self.set_fill_color(245, 250, 255)
             else:
-                self.set_fill_color(255, 255, 255) # White
+                self.set_fill_color(255, 255, 255)
             
             grade = get_grade(score)
             self.set_font("Amiri", size=12)
@@ -115,18 +117,18 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=11)
         self.cell(65, 5, ar("توقيع اللجنة الامتحانية"), 0, 1, 'C')
 
-        # 7. Official Note (Bold center)
+        # 7. Note
         self.set_xy(10, y_offset + 142)
         self.set_font("Amiri", size=12)
         self.cell(190, 5, ar("ملاحظة: لاتعتبر هذة الورقة وثيقة رسمية"), 0, 1, 'C')
 
-        # 8. Divider Line (Half A4)
-        self.set_draw_color(200, 200, 200) # Soft Grey Divider
+        # 8. Half-A4 Divider
+        self.set_draw_color(200, 200, 200)
         self.set_line_width(0.4)
         self.line(0, y_offset + 148.5, 210, y_offset + 148.5)
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="Al-Turath Official Results", layout="centered")
+st.set_page_config(page_title="Al-Turath Results", layout="centered")
 st.title("📑 Official Result Slips")
 
 stage_option = st.selectbox("Academic Stage:", ("المرحلة الأولى", "المرحلة الثانية"))
@@ -152,10 +154,11 @@ if file:
 
     with col2:
         if st.button("🚀 Download Full PDF"):
-            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-            pdf.set_auto_page_break(auto=False)
-            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-            for i, row in df.iterrows():
-                if i % 2 == 0: pdf.add_page()
-                pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
-            st.download_button("⬇️ Save PDF", bytes(pdf.output()), f"Results_{stage_option}.pdf")
+            with st.spinner(f"Generating slips for {len(df)} students..."):
+                pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+                pdf.set_auto_page_break(auto=False)
+                pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+                for i, row in df.iterrows():
+                    if i % 2 == 0: pdf.add_page()
+                    pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
+                st.download_button("⬇️ Save PDF", bytes(pdf.output()), f"Final_Results_{stage_option}.pdf")
