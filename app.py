@@ -15,11 +15,10 @@ def ar(text):
         return ""
     return get_display(reshape(str(text)))
 
-# --- RESTORED FULL GRADING LOGIC ---
+# --- Grading Logic ---
 def get_grade(score):
     try:
         if pd.isna(score): return "غائب"
-        # Extract numbers only
         clean_s = re.sub(r'[^\d.]', '', str(score).strip())
         if not clean_s: return "غائب"
         
@@ -29,7 +28,7 @@ def get_grade(score):
         if s >= 70: return "جيد"
         if s >= 60: return "متوسط"
         if s >= 50: return "مقبول"
-        return "ضعيف" # Under 50
+        return "ضعيف"
     except:
         return "ضعيف"
 
@@ -49,7 +48,7 @@ class ResultPDF(FPDF):
         if logo_data:
             self.image(logo_data, x=155, y=y_offset + 12, w=45)
 
-        # 2. Header Text (Black)
+        # 2. Header Text
         self.set_text_color(0, 0, 0)
         self.set_font("Amiri", size=15)
         self.set_xy(10, y_offset + 12)
@@ -62,7 +61,6 @@ class ResultPDF(FPDF):
         # 3. Student Name (Bold & Large)
         self.set_y(y_offset + 42)
         self.set_font("Amiri", size=16) 
-        # Attempt to find name in Column B
         name_val = data.iloc[1] if len(data) > 1 else "---"
         self.cell(190, 10, ar(f"اسم الطالب: {name_val}"), 0, 1, 'R')
 
@@ -81,33 +79,32 @@ class ResultPDF(FPDF):
                     break
             subjects.append((s_name, val))
 
-        # 5. Table (Green Header / Yellow Rows)
+        # 5. Table (Clean Light Blue Theme)
         start_x = 65 
         self.set_xy(start_x, y_offset + 58)
         
-        # Header Styling: Light Green + Black Bold
-        self.set_fill_color(144, 238, 144) 
+        # Header Styling: Soft Blue
+        self.set_fill_color(214, 230, 245) # Soft Sky Blue
         self.set_font("Amiri", size=13)
         self.cell(45, 11, ar("التقدير"), 1, 0, 'C', fill=True)
         self.cell(85, 11, ar("المادة"), 1, 1, 'C', fill=True)
         
-        # Rows: Alternating Light Yellow & White
+        # Rows Styling
         for i, (sub, score) in enumerate(subjects):
             self.set_x(start_x)
             if i % 2 == 0:
-                self.set_fill_color(255, 255, 224) # Light Yellow
+                self.set_fill_color(245, 250, 255) # Very Faint Blue
             else:
                 self.set_fill_color(255, 255, 255) # White
             
             grade = get_grade(score)
             self.set_font("Amiri", size=12)
             
-            # Text color red if weak, else black
             if grade == "ضعيف": self.set_text_color(200, 0, 0)
             else: self.set_text_color(0, 0, 0)
 
             self.cell(45, 10, ar(grade), 1, 0, 'C', fill=True)
-            self.set_text_color(0, 0, 0) # Ensure subject is black
+            self.set_text_color(0, 0, 0)
             self.cell(85, 10, ar(sub), 1, 1, 'C', fill=True)
 
         # 6. Stamp & Sign (Large: 65mm)
@@ -124,13 +121,13 @@ class ResultPDF(FPDF):
         self.cell(190, 5, ar("ملاحظة: لاتعتبر هذة الورقة وثيقة رسمية"), 0, 1, 'C')
 
         # 8. Divider Line (Half A4)
-        self.set_draw_color(0, 128, 0) # Green border line
-        self.set_line_width(0.6)
+        self.set_draw_color(200, 200, 200) # Soft Grey Divider
+        self.set_line_width(0.4)
         self.line(0, y_offset + 148.5, 210, y_offset + 148.5)
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Al-Turath Official Results", layout="centered")
-st.title("📑 Professional Result Slips")
+st.title("📑 Official Result Slips")
 
 stage_option = st.selectbox("Academic Stage:", ("المرحلة الأولى", "المرحلة الثانية"))
 
