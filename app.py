@@ -15,7 +15,7 @@ def ar(text):
         return ""
     return get_display(reshape(str(text)))
 
-# --- Grading Logic (With "قيد المعالجة" for 45) ---
+# --- Grading Logic ---
 def get_grade(score):
     try:
         if pd.isna(score): return "غائب"
@@ -48,7 +48,7 @@ def get_logo_bytes(url):
 
 class ResultPDF(FPDF):
     def draw_slip(self, data, y_offset, logo_data, stage_name):
-        # 1. Logo (Top Right)
+        # 1. Logo
         if logo_data:
             self.image(logo_data, x=155, y=y_offset + 12, w=45)
 
@@ -84,15 +84,16 @@ class ResultPDF(FPDF):
         student_info = f"اسم الطالب: {name_val}    -    الشعبة: {group_letter}"
         self.cell(190, 10, ar(student_info), 0, 1, 'R')
 
-        # 4. SUBJECT MAPPING
+        # 4. SUBJECT MAPPING (Removed "معالجات" entirely)
         raw_subjects = []
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
+            # القائمة المحدثة بدون عمود المعالجات
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
-                "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "معالجات"
+                "اللغة العربية", "الحاسوب", "اللغة الانكليزية"
             ]
 
         for s_name in sub_list:
@@ -105,18 +106,12 @@ class ResultPDF(FPDF):
                     break
             raw_subjects.append((found_name, val))
 
-        # --- CRITICAL FILTER: Remove "معالجات" or "غائب" entirely from display ---
+        # --- Filter: Skip any subject labeled "غائب" ---
         subjects = []
         for sub, score in raw_subjects:
-            # تخطي عمود المعالجات تماماً
-            if "معالجات" in str(sub) or str(sub).strip() == "معالجات":
-                continue
-            
             grade_check = get_grade(score)
-            # تخطي أي مادة تقديرها غائب
             if grade_check == "غائب":
                 continue
-                
             subjects.append((sub, score))
 
         # 5. Table Layout
@@ -170,8 +165,9 @@ def create_excel_template(stage):
         columns = ["ت", "اسم الطالب", "الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "الشعب"]
         example_row = [1, "ابتسام قاسم محمد عوده", 50, 70, 52, 90, 60, 88, "group - A"]
     else:
-        columns = ["ت", "اسم الطالب", "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "معالجات", "الشعب"]
-        example_row = [1, "أحمد انور محمد زبار الجميلي", 54, 50, 67, 36, 59, 71, 85, 65, 72, "", "group - A"]
+        # التمبلت الجديد بدون عمود المعالجات
+        columns = ["ت", "اسم الطالب", "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "الشعب"]
+        example_row = [1, "أحمد انور محمد زبار الجميلي", 54, 50, 67, 36, 59, 71, 85, 65, 72, "group - A"]
         
     df_template = pd.DataFrame([example_row], columns=columns)
     output = BytesIO()
@@ -224,11 +220,17 @@ if file:
             st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="700" type="application/pdf"></iframe>', unsafe_allow_html=True)
 
     with col2:
-        if st.button("🚀 Download Full PDF"):
-            pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-            pdf.set_auto_page_break(auto=False)
-            pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-            for i, row in df.iterrows():
-                if i % 2 == 0: pdf.add_page()
-                pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
-            st.download_button("⬇️ Save PDF", bytes(pdf.output()), f"Final_Results_{stage_option}.pdf")
+        pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+        pdf.set_auto_page_break(auto=False)
+        pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+        
+        for i, row in df.iterrows():
+            if i % 2 == 0: pdf.add_page()
+            pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
+            
+        st.download_button(
+            label="🚀 Download Full PDF", 
+            data=bytes(pdf.output()), 
+            file_name=f"Final_Results_{stage_option}.pdf",
+            mime="application/pdf"
+        )
