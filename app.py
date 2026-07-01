@@ -20,7 +20,11 @@ def get_grade(score):
     try:
         if pd.isna(score): return "غائب"
         clean_s = re.sub(r'[^\d.]', '', str(score).strip())
-        if not clean_s: return "غائب"
+        if not clean_s: 
+            # إذا كانت القيمة نصية مثل "معالجة مساحة" أو فارغة
+            if "معالج" in str(score):
+                return "قيد المعالجة"
+            return "غائب"
         
         s = float(clean_s)
         if round(s) == 45: return "قيد المعالجة"
@@ -59,18 +63,20 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=11)
         self.cell(140, 6, ar(f"{stage_name} - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 3. Safe Extraction of Name & Group
+        # 3. Dynamic Identification of Student Name & Group
         self.set_y(y_offset + 42)
         self.set_font("Amiri", size=14) 
         
-        # Safe Name extraction (Fallback to column index 1 if string match fails)
+        # Search for Name column
         name_val = "---"
-        if "اسم الطالب" in data.index:
-            name_val = data["اسم الطالب"]
-        elif len(data) > 1:
+        for col in data.index:
+            if "اسم الطالب" in str(col):
+                name_val = data[col]
+                break
+        if name_val == "---" and len(data) > 1:
             name_val = data.iloc[1]
             
-        # Safe Group extraction
+        # Search for Group column (Checking for 'الشعب' or 'الشعبة')
         raw_group = "---"
         for col in data.index:
             if "الشعب" in str(col):
@@ -86,6 +92,7 @@ class ResultPDF(FPDF):
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
+            # Matched exactly with your sample columns
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
@@ -147,14 +154,14 @@ class ResultPDF(FPDF):
         self.set_draw_color(200, 200, 200)
         self.line(0, y_offset + 148.5, 210, y_offset + 148.5)
 
-# --- Helper to create download template ---
+# --- Creator template ---
 def create_excel_template(stage):
     if "الأولى" in stage:
-        columns = ["ت", "اسم الطالب", "الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "الشعبة"]
-        example_row = [1, "ابتسام قاسم محمد عوده", 50, 70, 52, 90, 60, 88, "A"]
+        columns = ["ت", "اسم الطالب", "الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "الشعب"]
+        example_row = [1, "ابتسام قاسم محمد عوده", 50, 70, 52, 90, 60, 88, "group - A"]
     else:
-        columns = ["ت", "اسم الطالب", "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "معالجات", "الشعبة"]
-        example_row = [1, "محمد علي أحمد", 75, 45, 82, 60, 55, 90, 72, 85, 68, 50, "B"]
+        columns = ["ت", "اسم الطالب", "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "معالجات", "الشعب"]
+        example_row = [1, "أحمد انور محمد زبار الجميلي", 54, 50, 67, 36, 59, 71, 85, 65, 72, "", "group - A"]
         
     df_template = pd.DataFrame([example_row], columns=columns)
     output = BytesIO()
@@ -168,9 +175,7 @@ st.title("🎓 Official Result Slips")
 
 stage_option = st.selectbox("Academic Stage:", ("المرحلة الأولى", "المرحلة الثانية"))
 
-# --- Template Download Section ---
 st.markdown("### 📥 نموذج ملف الـ Excel المطلوب")
-st.write("إذا واجهت أي أخطاء في قراءة البيانات، قم بتحميل هذا النموذج الفارغ وانسخ بياناتك داخله مباشرة بنفس الترتيب:")
 template_bytes = create_excel_template(stage_option)
 st.download_button(
     label=f"⬇️ تحميل نموذج Excel لـ ({stage_option})",
@@ -186,8 +191,19 @@ logo_data = get_logo_bytes(logo_url)
 file = st.file_uploader("Upload Your Excel File Here", type=["xlsx"])
 
 if file:
-    df = pd.read_excel(file, engine='openpyxl')
-    # Clean string column names
+    # نقوم بقراءة أول سطرين للتأكد إذا كان السطر الأول يحتوي على عنوان الكلية لتخطيه
+    initial_read = pd.read_excel(file, header=None, nrows=2, engine='openpyxl')
+    
+    # تحسين ذكي: إذا كان السطر الأول يحتوي على نصوص مدمجة أو "الهندسة المدنية"، نقوم بتخطيه وتعيين السطر الثاني كعناوين
+    first_cell = str(initial_read.iloc[0, 0]) if not initial_read.empty else ""
+    second_cell = str(initial_read.iloc[0, 1]) if initial_read.shape[1] > 1 else ""
+    
+    if "الهندسة" in first_cell or "المرحلة" in first_cell or "الهندسة" in second_cell or pd.isna(initial_read.iloc[0, 0]):
+        df = pd.read_excel(file, skiprows=1, engine='openpyxl')
+    else:
+        df = pd.read_excel(file, engine='openpyxl')
+        
+    # تنظيف أسماء الأعمدة من الفراغات المخفية
     df.columns = [str(c).strip() for c in df.columns]
     
     col1, col2 = st.columns(2)
