@@ -91,7 +91,7 @@ class ResultPDF(FPDF):
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
-            # تم إزالة "معالجات" نهائياً وبشكل كامل من قائمة الفحص والقراءة
+            # هنا تم مسح كلمة معالجات من الفحص تماماً لتختفي من القائمة
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
@@ -108,7 +108,7 @@ class ResultPDF(FPDF):
                     break
             raw_subjects.append((found_name, val))
 
-        # --- Filter: استبعاد أي مادة تحتوي على كلمة معالج أو تقدير غائب ---
+        # --- Strict Filter: منع إدخال أي شيء يتعلق بالمعالجات أو الغياب ---
         subjects = []
         for sub, score in raw_subjects:
             if "معالج" in str(sub) or "معالج" in str(score):
@@ -224,21 +224,21 @@ if file:
             st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="700" type="application/pdf"></iframe>', unsafe_allow_html=True)
 
     with col2:
-        # الحل النهائي لمشكلة الـ None: توليد الملف بالكامل وتجهيزه للتحميل المباشر بضغطة واحدة
-        full_pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-        full_pdf.set_auto_page_break(auto=False)
-        full_pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
-        
-        for i, row in df.iterrows():
-            if i % 2 == 0: full_pdf.add_page()
-            full_pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
-            
-        pdf_output = full_pdf.output()
-        pdf_bytes = bytes(pdf_output) if isinstance(pdf_output, (bytes, bytearray)) else pdf_output
-        
-        st.download_button(
-            label="🚀 Download Full PDF", 
-            data=pdf_bytes, 
-            file_name=f"Final_Results_{stage_option}.pdf",
-            mime="application/pdf"
-        )
+        # الحل النهائي لـ None: حظر توليد الكود التلقائي وربطه بـ سبيّنر تحميل حقيقي
+        if st.button("🚀 Generate & Download Full PDF"):
+            with st.spinner("جاري معالجة المستندات وحذف عمود المعالجات..."):
+                full_pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+                full_pdf.set_auto_page_break(auto=False)
+                full_pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+                
+                for i, row in df.iterrows():
+                    if i % 2 == 0: full_pdf.add_page()
+                    full_pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
+                    
+                pdf_output = full_pdf.output()
+                pdf_bytes = bytes(pdf_output) if isinstance(pdf_output, (bytes, bytearray)) else pdf_output
+                
+                # استخدام طريقة التنزيل عبر الجلسة المخفية لمنع ظهور أي مخلفات نصية
+                b64 = base64.b64encode(pdf_bytes).decode()
+                href = f'<a href="data:application/pdf;base64,{b64}" download="Final_Results_{stage_option}.pdf" style="text-decoration:none;"><button style="width:100%; padding:10px; background-color:#2196F3; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;">⬇️ اضغط هنا لحفظ ملف الـ PDF النهائي</button></a>'
+                st.markdown(href, unsafe_allow_html=True)
