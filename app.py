@@ -23,9 +23,7 @@ def get_grade(score):
         if not clean_s: return "غائب"
         
         s = float(clean_s)
-        # Condition for exactly 45 or rounded to 45
         if round(s) == 45: return "قيد المعالجة"
-        
         if s >= 90: return "ممتاز"
         if s >= 80: return "جيد جدًا"
         if s >= 70: return "جيد"
@@ -61,12 +59,18 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=11)
         self.cell(140, 6, ar(f"{stage_name} - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 3. Student Name & Group (Column B / Index 1)
+        # 3. Safe Extraction of Name & Group
         self.set_y(y_offset + 42)
         self.set_font("Amiri", size=14) 
-        name_val = data.iloc[1]
         
-        # Extract Group Letter Dynamic Check
+        # Safe Name extraction (Fallback to column index 1 if string match fails)
+        name_val = "---"
+        if "اسم الطالب" in data.index:
+            name_val = data["اسم الطالب"]
+        elif len(data) > 1:
+            name_val = data.iloc[1]
+            
+        # Safe Group extraction
         raw_group = "---"
         for col in data.index:
             if "الشعب" in str(col):
@@ -80,37 +84,26 @@ class ResultPDF(FPDF):
         # 4. SUBJECT MAPPING
         subjects = []
         if "الأولى" in stage_name:
-            try:
-                subjects = [
-                    (data.index[2], data.iloc[2]), 
-                    (data.index[3], data.iloc[3]), 
-                    (data.index[4], data.iloc[4]), 
-                    (data.index[5], data.iloc[5]), 
-                    (data.index[6], data.iloc[6]), 
-                    (data.index[7], data.iloc[7])
-                ]
-            except Exception as e:
-                st.error("Excel columns are not in the expected order.")
+            sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
-            # New updated Semester 2 subject list for Phase 2
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
                 "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "معالجات"
             ]
-            for s_name in sub_list:
-                val = 0
-                found_name = s_name
-                for col in data.index:
-                    if s_name in str(col):
-                        val = data[col]
-                        found_name = str(col) # Keep actual column header text
-                        break
-                subjects.append((found_name, val))
 
-        # 5. Table Layout (Dynamic spacing if subject list gets long)
+        for s_name in sub_list:
+            val = 0
+            found_name = s_name
+            for col in data.index:
+                if s_name in str(col):
+                    val = data[col]
+                    found_name = str(col)
+                    break
+            subjects.append((found_name, val))
+
+        # 5. Table Layout
         start_x = 65 
-        # Scale row height slightly based on row count to ensure perfect fit inside A4 half
         row_h = 7.5 if len(subjects) > 7 else 10
         
         self.set_xy(start_x, y_offset + 55)
@@ -126,11 +119,10 @@ class ResultPDF(FPDF):
             grade = get_grade(score)
             self.set_font("Amiri", size=11)
             
-            # Text formatting highlights
             if grade == "ضعيف": 
                 self.set_text_color(200, 0, 0)
             elif grade == "قيد المعالجة":
-                self.set_text_color(210, 105, 30) # Distinct orange/brown color
+                self.set_text_color(210, 105, 30) 
             else: 
                 self.set_text_color(0, 0, 0)
 
@@ -138,7 +130,7 @@ class ResultPDF(FPDF):
             self.set_text_color(0, 0, 0)
             self.cell(85, row_h, ar(sub), 1, 1, 'C', fill=True)
 
-        # 6. Stamp & Sign (Actual Size Left Space)
+        # 6. Stamp & Sign
         if os.path.exists("stamp.png"):
             self.image("stamp.png", x=5, y=y_offset + 62, w=65)
         
@@ -155,20 +147,48 @@ class ResultPDF(FPDF):
         self.set_draw_color(200, 200, 200)
         self.line(0, y_offset + 148.5, 210, y_offset + 148.5)
 
+# --- Helper to create download template ---
+def create_excel_template(stage):
+    if "الأولى" in stage:
+        columns = ["ت", "اسم الطالب", "الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "الشعبة"]
+        example_row = [1, "ابتسام قاسم محمد عوده", 50, 70, 52, 90, 60, 88, "A"]
+    else:
+        columns = ["ت", "اسم الطالب", "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "معالجات", "الشعبة"]
+        example_row = [1, "محمد علي أحمد", 75, 45, 82, 60, 55, 90, 72, 85, 68, 50, "B"]
+        
+    df_template = pd.DataFrame([example_row], columns=columns)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_template.to_excel(writer, index=False, sheet_name='Sheet1')
+    return output.getvalue()
+
 # --- Streamlit UI ---
 st.set_page_config(page_title="Al-Turath Official Results", layout="centered")
-st.title("📑 Official Result Slips")
+st.title("🎓 Official Result Slips")
 
 stage_option = st.selectbox("Academic Stage:", ("المرحلة الأولى", "المرحلة الثانية"))
+
+# --- Template Download Section ---
+st.markdown("### 📥 نموذج ملف الـ Excel المطلوب")
+st.write("إذا واجهت أي أخطاء في قراءة البيانات، قم بتحميل هذا النموذج الفارغ وانسخ بياناتك داخله مباشرة بنفس الترتيب:")
+template_bytes = create_excel_template(stage_option)
+st.download_button(
+    label=f"⬇️ تحميل نموذج Excel لـ ({stage_option})",
+    data=template_bytes,
+    file_name=f"Template_{stage_option.replace(' ', '_')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+st.write("---")
 
 logo_url = "https://upload.wikimedia.org/wikipedia/commons/c/c0/Turath_University_Logo_New.jpg"
 logo_data = get_logo_bytes(logo_url)
 
-file = st.file_uploader("Upload Excel", type=["xlsx"])
+file = st.file_uploader("Upload Your Excel File Here", type=["xlsx"])
 
 if file:
-    # Ensure raw header string spaces don't interfere with rendering
     df = pd.read_excel(file, engine='openpyxl')
+    # Clean string column names
+    df.columns = [str(c).strip() for c in df.columns]
     
     col1, col2 = st.columns(2)
     with col1:
