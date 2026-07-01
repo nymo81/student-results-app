@@ -21,7 +21,6 @@ def get_grade(score):
         if pd.isna(score): return "غائب"
         clean_s = re.sub(r'[^\d.]', '', str(score).strip())
         if not clean_s: 
-            # إذا كانت القيمة نصية مثل "معالجة مساحة" أو فارغة
             if "معالج" in str(score):
                 return "قيد المعالجة"
             return "غائب"
@@ -63,11 +62,10 @@ class ResultPDF(FPDF):
         self.set_font("Amiri", size=11)
         self.cell(140, 6, ar(f"{stage_name} - العام الدراسي 2025-2026"), ln=1, align='R')
 
-        # 3. Dynamic Identification of Student Name & Group
+        # 3. Student Name & Group
         self.set_y(y_offset + 42)
         self.set_font("Amiri", size=14) 
         
-        # Search for Name column
         name_val = "---"
         for col in data.index:
             if "اسم الطالب" in str(col):
@@ -76,7 +74,6 @@ class ResultPDF(FPDF):
         if name_val == "---" and len(data) > 1:
             name_val = data.iloc[1]
             
-        # Search for Group column (Checking for 'الشعب' or 'الشعبة')
         raw_group = "---"
         for col in data.index:
             if "الشعب" in str(col):
@@ -88,11 +85,10 @@ class ResultPDF(FPDF):
         self.cell(190, 10, ar(student_info), 0, 1, 'R')
 
         # 4. SUBJECT MAPPING
-        subjects = []
+        raw_subjects = []
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
-            # Matched exactly with your sample columns
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
@@ -107,7 +103,21 @@ class ResultPDF(FPDF):
                     val = data[col]
                     found_name = str(col)
                     break
-            subjects.append((found_name, val))
+            raw_subjects.append((found_name, val))
+
+        # --- CRITICAL FILTER: Remove "معالجات" or "غائب" entirely from display ---
+        subjects = []
+        for sub, score in raw_subjects:
+            # تخطي عمود المعالجات تماماً
+            if "معالجات" in str(sub) or str(sub).strip() == "معالجات":
+                continue
+            
+            grade_check = get_grade(score)
+            # تخطي أي مادة تقديرها غائب
+            if grade_check == "غائب":
+                continue
+                
+            subjects.append((sub, score))
 
         # 5. Table Layout
         start_x = 65 
@@ -191,10 +201,8 @@ logo_data = get_logo_bytes(logo_url)
 file = st.file_uploader("Upload Your Excel File Here", type=["xlsx"])
 
 if file:
-    # نقوم بقراءة أول سطرين للتأكد إذا كان السطر الأول يحتوي على عنوان الكلية لتخطيه
     initial_read = pd.read_excel(file, header=None, nrows=2, engine='openpyxl')
     
-    # تحسين ذكي: إذا كان السطر الأول يحتوي على نصوص مدمجة أو "الهندسة المدنية"، نقوم بتخطيه وتعيين السطر الثاني كعناوين
     first_cell = str(initial_read.iloc[0, 0]) if not initial_read.empty else ""
     second_cell = str(initial_read.iloc[0, 1]) if initial_read.shape[1] > 1 else ""
     
@@ -203,7 +211,6 @@ if file:
     else:
         df = pd.read_excel(file, engine='openpyxl')
         
-    # تنظيف أسماء الأعمدة من الفراغات المخفية
     df.columns = [str(c).strip() for c in df.columns]
     
     col1, col2 = st.columns(2)
