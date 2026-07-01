@@ -92,7 +92,6 @@ class ResultPDF(FPDF):
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
-            # تم حذف "معالجات" نهائياً من القائمة المستهدفة والقراءة
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
@@ -109,9 +108,10 @@ class ResultPDF(FPDF):
                     break
             raw_subjects.append((found_name, val))
 
-        # --- Strict Filter: إزالة أي مادة تقديرها غائب أو تحتوي على كلمة معالجة ---
+        # --- Strict Filter: إزالة مادة "معالجات" والتقديرات النصية الخاصة بها تماماً ---
         subjects = []
         for sub, score in raw_subjects:
+            # تصفية صارمة لاسم المادة أو القيمة إذا احتوت على كلمة معالجة
             if "معالج" in str(sub) or "معالج" in str(score):
                 continue
             
@@ -225,7 +225,7 @@ if file:
             st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="700" type="application/pdf"></iframe>', unsafe_allow_html=True)
 
     with col2:
-        # بناء ملف الـ PDF بالكامل بشكل صامت وخلفي لمنع ظهور كلمة None
+        # توليد ملف الـ PDF كاملاً بشكل صامت وحفظه في ميموري بايتس لمنع الـ None تماماً
         full_pdf = ResultPDF(orientation='P', unit='mm', format='A4')
         full_pdf.set_auto_page_break(auto=False)
         full_pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
@@ -234,12 +234,12 @@ if file:
             if i % 2 == 0: full_pdf.add_page()
             full_pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
             
-        # تحويل الإخراج إلى كود باينري مباشر لزر التحميل ليعمل فوراً وبشكل نظيف
-        pdf_data = bytes(full_pdf.output())
+        pdf_output = full_pdf.output()
+        pdf_bytes = bytes(pdf_output) if isinstance(pdf_output, (bytes, bytearray)) else pdf_output
         
         st.download_button(
             label="🚀 Download Full PDF", 
-            data=pdf_data, 
+            data=pdf_bytes, 
             file_name=f"Final_Results_{stage_option}.pdf",
             mime="application/pdf"
         )
