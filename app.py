@@ -20,7 +20,6 @@ def get_grade(score):
     try:
         if pd.isna(score): return "غائب"
         
-        # إذا كانت القيمة تحتوي على كلمة معالجة (مثل معالجة مساحة)
         if "معالج" in str(score):
             return "قيد المعالجة"
             
@@ -92,6 +91,7 @@ class ResultPDF(FPDF):
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
+            # تم إزالة "معالجات" نهائياً وبشكل كامل من قائمة الفحص والقراءة
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
@@ -108,10 +108,9 @@ class ResultPDF(FPDF):
                     break
             raw_subjects.append((found_name, val))
 
-        # --- Strict Filter: إزالة مادة "معالجات" والتقديرات النصية الخاصة بها تماماً ---
+        # --- Filter: استبعاد أي مادة تحتوي على كلمة معالج أو تقدير غائب ---
         subjects = []
         for sub, score in raw_subjects:
-            # تصفية صارمة لاسم المادة أو القيمة إذا احتوت على كلمة معالجة
             if "معالج" in str(sub) or "معالج" in str(score):
                 continue
             
@@ -225,7 +224,7 @@ if file:
             st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="700" type="application/pdf"></iframe>', unsafe_allow_html=True)
 
     with col2:
-        # توليد ملف الـ PDF كاملاً بشكل صامت وحفظه في ميموري بايتس لمنع الـ None تماماً
+        # الحل النهائي لمشكلة الـ None: توليد الملف بالكامل وتجهيزه للتحميل المباشر بضغطة واحدة
         full_pdf = ResultPDF(orientation='P', unit='mm', format='A4')
         full_pdf.set_auto_page_break(auto=False)
         full_pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
