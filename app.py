@@ -19,10 +19,13 @@ def ar(text):
 def get_grade(score):
     try:
         if pd.isna(score): return "غائب"
+        
+        # إذا كانت القيمة تحتوي على كلمة معالجة (مثل معالجة مساحة)
+        if "معالج" in str(score):
+            return "قيد المعالجة"
+            
         clean_s = re.sub(r'[^\d.]', '', str(score).strip())
         if not clean_s: 
-            if "معالج" in str(score):
-                return "قيد المعالجة"
             return "غائب"
         
         s = float(clean_s)
@@ -84,12 +87,12 @@ class ResultPDF(FPDF):
         student_info = f"اسم الطالب: {name_val}    -    الشعبة: {group_letter}"
         self.cell(190, 10, ar(student_info), 0, 1, 'R')
 
-        # 4. SUBJECT MAPPING (Removed "معالجات" entirely)
+        # 4. SUBJECT MAPPING
         raw_subjects = []
         if "الأولى" in stage_name:
             sub_list = ["الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب"]
         else:
-            # القائمة المحدثة بدون عمود المعالجات
+            # تم حذف "معالجات" نهائياً من القائمة المستهدفة والقراءة
             sub_list = [
                 "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", 
                 "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", 
@@ -106,9 +109,12 @@ class ResultPDF(FPDF):
                     break
             raw_subjects.append((found_name, val))
 
-        # --- Filter: Skip any subject labeled "غائب" ---
+        # --- Strict Filter: إزالة أي مادة تقديرها غائب أو تحتوي على كلمة معالجة ---
         subjects = []
         for sub, score in raw_subjects:
+            if "معالج" in str(sub) or "معالج" in str(score):
+                continue
+            
             grade_check = get_grade(score)
             if grade_check == "غائب":
                 continue
@@ -165,7 +171,6 @@ def create_excel_template(stage):
         columns = ["ت", "اسم الطالب", "الرسم الهندسي", "ميكانيك", "الرياضيات", "اللغة العربية", "مواد البناء", "حاسوب", "الشعب"]
         example_row = [1, "ابتسام قاسم محمد عوده", 50, 70, 52, 90, 60, 88, "group - A"]
     else:
-        # التمبلت الجديد بدون عمود المعالجات
         columns = ["ت", "اسم الطالب", "المقاومة", "التحليلات الهندسية", "تقنية الخرسانية", "المساحة الهندسية", "ميكانيك الموائع", "جرائم البعث", "اللغة العربية", "الحاسوب", "اللغة الانكليزية", "الشعب"]
         example_row = [1, "أحمد انور محمد زبار الجميلي", 54, 50, 67, 36, 59, 71, 85, 65, 72, "group - A"]
         
@@ -220,17 +225,21 @@ if file:
             st.markdown(f'<iframe src="data:application/pdf;base64,{b64_pdf}" width="100%" height="700" type="application/pdf"></iframe>', unsafe_allow_html=True)
 
     with col2:
-        pdf = ResultPDF(orientation='P', unit='mm', format='A4')
-        pdf.set_auto_page_break(auto=False)
-        pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
+        # بناء ملف الـ PDF بالكامل بشكل صامت وخلفي لمنع ظهور كلمة None
+        full_pdf = ResultPDF(orientation='P', unit='mm', format='A4')
+        full_pdf.set_auto_page_break(auto=False)
+        full_pdf.add_font("Amiri", "", "Amiri-Regular.ttf")
         
         for i, row in df.iterrows():
-            if i % 2 == 0: pdf.add_page()
-            pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
+            if i % 2 == 0: full_pdf.add_page()
+            full_pdf.draw_slip(row, (i % 2) * 148.5, logo_data, stage_option)
             
+        # تحويل الإخراج إلى كود باينري مباشر لزر التحميل ليعمل فوراً وبشكل نظيف
+        pdf_data = bytes(full_pdf.output())
+        
         st.download_button(
             label="🚀 Download Full PDF", 
-            data=bytes(pdf.output()), 
+            data=pdf_data, 
             file_name=f"Final_Results_{stage_option}.pdf",
             mime="application/pdf"
         )
